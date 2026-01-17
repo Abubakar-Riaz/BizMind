@@ -37,27 +37,49 @@ def mock_ai_sql_generator(query):
 
 def get_sql_from_gemini(query):
     prompt=f"""
-        You are an expert SQL Data Analyst.
-    I have a SQLite table named 'product'.
-    Columns:
-    - id (integer)
-    - name (text)
-    - price (float)
-    - stock (integer)
+            You are an expert SQL Data Analyst.
+        I have a SQLite table named 'product'.
+        Columns:
+        - id (integer)
+        - name (text)
+        - price (float)
+        - stock (integer)
 
-    Task: Convert this English question into a SQL query.
-    Question: "{query}"
-    
-    Rules:
-    1. Return ONLY the raw SQL query. Do not use Markdown (no ```sql).
-    2. Do not explain your answer.
-    3. If the user asks for total value, use SUM(price * stock).
+        Task: Convert this English question into a SQL query.
+        Question: "{query}"
+        
+        Rules:
+        1. Return ONLY the raw SQL query. Do not use Markdown (no ```sql).
+        2. Do not explain your answer.
+        3. If the user asks for total value, use SUM(price * stock).
     """
 
     model=genai.GenerativeModel('gemini-3-flash-preview')
     response=model.generate_content(prompt)
 
     return response.text.replace('```sql', '').replace('```', '').strip()
+
+def get_summary_from_gemini(query,generated_sql,result):
+    
+    if len(result)>0:
+        summary_prompt = f"""
+        User Question: "{query}"
+        SQL Query Run: "{generated_sql}"
+        Database Result: {result}
+
+        Task: Answer the user's question naturally based on this data. 
+        If it's a list, just say "Here is the list:" and summarize briefly.
+        Keep it short and professional.
+    """
+        
+        summary_model = genai.GenerativeModel('gemini-3-flash-preview')
+        summary_response = summary_model.generate_content(summary_prompt)
+        human_answer = str(summary_response.text)
+    else:
+        human_answer = "I found no data matching that request."
+
+        # Step 5: Return BOTH the data (for tables) and the text (for chat)
+    return human_answer
 
 @app.route('/products',methods=['GET'])
 def get_products():
@@ -81,7 +103,6 @@ def add_product():
 @app.route('/ask',methods=['POST'])
 def ask_database():
     query=request.json.get('question')
-
     generated_Sql=get_sql_from_gemini(query)
 
     try:
@@ -89,7 +110,8 @@ def ask_database():
 
         data=[dict(row._mapping) for row in result]
 
-        return jsonify({"answer":data,"generated sql":generated_Sql})
+        finalResponse=get_summary_from_gemini(query,generated_Sql,data)
+        return jsonify({"answer":finalResponse,"generated sql":generated_Sql})
     except Exception as e:
         return jsonify({"error":str(e)})
     
