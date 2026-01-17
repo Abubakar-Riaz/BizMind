@@ -1,7 +1,15 @@
+import os
 from flask import Flask,jsonify,request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
+from dotenv import load_dotenv
+import google.generativeai as genai
+
+load_dotenv()
+API_KEY=os.getenv('GOOGLE_API_KEY')
+
+genai.configure(api_key=API_KEY)
 
 app=Flask(__name__)
 CORS(app)
@@ -27,6 +35,30 @@ def mock_ai_sql_generator(query):
     
     return "SELECT * FROM product"
 
+def get_sql_from_gemini(query):
+    prompt=f"""
+        You are an expert SQL Data Analyst.
+    I have a SQLite table named 'product'.
+    Columns:
+    - id (integer)
+    - name (text)
+    - price (float)
+    - stock (integer)
+
+    Task: Convert this English question into a SQL query.
+    Question: "{query}"
+    
+    Rules:
+    1. Return ONLY the raw SQL query. Do not use Markdown (no ```sql).
+    2. Do not explain your answer.
+    3. If the user asks for total value, use SUM(price * stock).
+    """
+
+    model=genai.GenerativeModel('gemini-3-flash-preview')
+    response=model.generate_content(prompt)
+
+    return response.text.replace('```sql', '').replace('```', '').strip()
+
 @app.route('/products',methods=['GET'])
 def get_products():
     products=Product.query.all()
@@ -50,7 +82,7 @@ def add_product():
 def ask_database():
     query=request.json.get('question')
 
-    generated_Sql=mock_ai_sql_generator(query)
+    generated_Sql=get_sql_from_gemini(query)
 
     try:
         result=db.session.execute(text(generated_Sql))
