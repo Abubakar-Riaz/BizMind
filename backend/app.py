@@ -24,7 +24,7 @@ def get_products():
     for product in products:
         product_data={'id':product.id, 'name':product.name, 'price':product.price, 'stock':product.stock}
         output.append(product_data)
-    return jsonify({"product":output})
+    return jsonify({"products":output})
 
 @app.route('/products',methods=['POST'])
 def add_product():
