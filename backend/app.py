@@ -1,6 +1,7 @@
 from flask import Flask,jsonify,request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 
 app=Flask(__name__)
 CORS(app)
@@ -15,6 +16,16 @@ class Product(db.Model):
     name=db.Column(db.String(100),nullable=False)
     price=db.Column(db.Float,nullable=False)
     stock=db.Column(db.Integer,default=0)
+
+def mock_ai_sql_generator(query):
+    query=query.lower()
+
+    if "how many" in query or "count" in query:
+        return "SELECT sum(stock) as total_stock FROM product"
+    elif "expensive" in query or "highest price" in query:
+        return "SELECT name,price FROM product ORDER BY price DESC LIMIT 1"
+    
+    return "SELECT * FROM product"
 
 @app.route('/products',methods=['GET'])
 def get_products():
@@ -35,6 +46,21 @@ def add_product():
     db.session.commit()
     return jsonify({'message':'Product Created Successfully'})
 
+@app.route('/ask',methods=['POST'])
+def ask_database():
+    query=request.json.get('question')
+
+    generated_Sql=mock_ai_sql_generator(query)
+
+    try:
+        result=db.session.execute(text(generated_Sql))
+
+        data=[dict(row._mapping) for row in result]
+
+        return jsonify({"answer":data,"generated sql":generated_Sql})
+    except Exception as e:
+        return jsonify({"error":str(e)})
+    
 if __name__=='__main__':
     with app.app_context():
         db.create_all()
