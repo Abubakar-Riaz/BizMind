@@ -10,8 +10,12 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 import pytesseract
 import re
+import platform
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+if platform.system() == "Windows":
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+else:
+    print("Detected Linux. Using default Tesseract path.")
 load_dotenv()
 API_KEY=os.getenv('GOOGLE_API_KEY')
 
