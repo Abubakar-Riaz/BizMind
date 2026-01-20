@@ -83,7 +83,20 @@ function App() {
     }
     setLoadingChat(false);
   };
+  // --- NEW: DELETE FUNCTION ---
+const handleDelete = async (id) => {
+  if (!window.confirm("Are you sure you want to delete this item?")) return;
 
+  try {
+    await axios.delete(`http://127.0.0.1:5000/products/${id}`);
+    
+    setProducts(products.filter(product => product.id !== id));
+    
+  } catch (error) {
+    console.error("Delete Error:", error);
+    alert("Failed to delete item.");
+  }
+};
   // --- QUEUE LOGIC ---
   const loadNextItem = (currentQueue) => {
     if (currentQueue.length > 0) {
@@ -234,9 +247,28 @@ function App() {
             {products.length === 0 ? <p>No items yet.</p> : (
               <ul style={{ listStyle: 'none', padding: 0 }}>
                 {products.map(p => (
-                  <li key={p.id} style={{ padding: '10px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
-                    <span><strong>{p.name}</strong> (x{p.stock})</span>
-                    <span style={{ color: '#28a745', fontWeight: 'bold' }}>${p.price}</span>
+                  <li key={p.id} style={{padding: '10px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between',alignItems: 'center' // Ensures button aligns with text
+                    }}>
+                    
+                    {/* Product Info */}
+                    <span>
+                      <strong>{p.name}</strong> (x{p.stock})
+                    </span>
+                    
+                    {/* Right Side: Price + Delete Button */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                      <span style={{ color: '#28a745', fontWeight: 'bold' }}>${p.price}</span>
+                      
+                      <button 
+                        onClick={() => handleDelete(p.id)}
+                        style={{
+                          background: '#ff4d4d',color: 'white',border: 'none',borderRadius: '4px',padding: '5px 10px',cursor: 'pointer',fontSize: '0.8rem'
+                        }}
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+
                   </li>
                 ))}
               </ul>

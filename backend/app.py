@@ -1,6 +1,7 @@
 import os
 import json
 import PIL.Image
+from PIL import Image
 from flask import Flask,jsonify,request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -8,7 +9,7 @@ from sqlalchemy import text
 from dotenv import load_dotenv
 import google.generativeai as genai
 import pytesseract
-
+import re
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 load_dotenv()
@@ -106,6 +107,99 @@ def analyze_image_with_gemini(image_file):
     clean_json=response.text.replace('```json','').replace('```','').strip()
     return clean_json
 
+def read_text_with_ocr(image_path):
+
+    if not os.path.exists(image_path):
+        print("Error: File not found.")
+        return
+
+    try:
+        # 2. Open Image
+        img = Image.open(image_path)
+        
+        custom_config = r'--oem 3 --psm 6' 
+        text = pytesseract.image_to_string(img, config=custom_config)
+        
+        return text
+    
+    except Exception as e:
+        print(f"Error: {e}")
+        return 404
+def parse_invoice_text(raw_text):
+
+    products=[]
+    lines=raw_text.split('\n')
+
+    pattern=r'(.*?)\s+(?:Rs|rs|RS)[^\d]*(\d+)\D*(\d+)'
+
+    header_found=False
+
+    for i,line in enumerate(lines[:10]):
+        line_lower=line.lower()
+
+        if "item" in line_lower or ("rate" in line_lower or "qty" in line_lower or "quantity" in line_lower):
+            print(f"DEBUG: Found header row: {line}")
+            
+            idx_qty=line_lower.find("qty")
+            if idx_qty==-1:idx_qty=line_lower.find("quantity")
+
+            idx_rate=line_lower.find("rate")
+            if idx_rate==-1:idx_rate=line_lower.find("price")
+
+            if idx_qty>-1 and idx_rate>-1:
+                if idx_qty < idx_rate:
+                    # Case: Quantity comes BEFORE Rate
+                    # Header: "Item | Qty | Rate"
+                    # Regex: Name ... Qty ... Price
+                    print("DEBUG: Detected 'Qty' before 'Price'")
+                    pattern = r'(.*?)\s+(\d+)\s+(?:Rs|rs|RS)[^\d]*(\d+)'
+                    # Note: In this pattern, Group 2 is Qty, Group 3 is Price. We must swap them later.
+                    header_found = "QTY_FIRST"
+                else:
+                    print("DEBUG: Detected 'Price' before 'Qty' (Standard)")
+                    header_found = "PRICE_FIRST"
+            break
+    ignore_words=["total","subtotal","tax","gst","receipt","date","thank"]
+
+    for line in lines:
+        line_clean=line.strip()
+
+        if not line_clean:continue
+
+        if any(w in line_clean.lower() for w in ignore_words):
+            continue
+        if "item" in line_clean.lower() and "rate" in line_clean.lower():
+            continue
+
+        match=re.search(pattern,line_clean)
+
+        if match:
+            # Extraction depends on which pattern we used
+            if header_found == "QTY_FIRST":
+                # Pattern was: Name ... Qty ... Price
+                name_raw = match.group(1).strip()
+                qty_raw = match.group(2)
+                price_raw = match.group(3)
+            else:
+                # Pattern was: Name ... Price ... Qty (Standard)
+                name_raw = match.group(1).strip()
+                price_raw = match.group(2)
+                qty_raw = match.group(3)
+
+            # Cleanup
+            if len(name_raw) > 2:
+                try:
+                    products.append({
+                        "name": name_raw.rstrip('-., '),
+                        "price": float(price_raw),
+                        "stock": int(qty_raw)
+                    })
+                except ValueError:
+                    continue
+
+    return products
+
+
 @app.route('/products',methods=['GET'])
 def get_products():
     products=Product.query.all()
@@ -124,6 +218,17 @@ def add_product():
     db.session.add(new_product)
     db.session.commit()
     return jsonify({'message':'Product Created Successfully'})
+
+@app.route('/products/<int:id>',methods=['DELETE'])
+def delete_product(id):
+    product=db.get_or_404(Product,id)
+    try:
+        db.session.delete(product)
+        db.session.commit()
+        print("User deleted successfully")
+        return jsonify({"message":"deleted successfully"}),200
+    except Exception as e:
+        return jsonify({"Error":str(e)}),500
 
 @app.route('/ask',methods=['POST'])
 def ask_database():
@@ -148,8 +253,10 @@ def scan_invoice():
     file=request.files['file']
 
     try:
-        json_str=analyze_image_with_gemini(file)
-        data=json.loads(json_str)
+        #json_str=analyze_image_with_gemini(file)
+        ocr_txt=read_text_with_ocr('testimg.png')
+        data=parse_invoice_text(ocr_txt)
+        #data=json.loads(json_str)
 
         if not isinstance(data,list):
             data=[data]
