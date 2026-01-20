@@ -83,13 +83,18 @@ function App() {
     }
     setLoadingChat(false);
   };
+
   // --- NEW: DELETE FUNCTION ---
-const handleDelete = async (id) => {
+const handleDeleteProduct = async (id) => {
+  // 1. Optional: Confirm before deleting
   if (!window.confirm("Are you sure you want to delete this item?")) return;
 
   try {
+    // 2. Call the API
     await axios.delete(`http://127.0.0.1:5000/products/${id}`);
     
+    // 3. Update the UI *instantly* (Filter out the deleted item)
+    // This is better than re-fetching the whole list!
     setProducts(products.filter(product => product.id !== id));
     
   } catch (error) {
@@ -97,6 +102,31 @@ const handleDelete = async (id) => {
     alert("Failed to delete item.");
   }
 };
+const handleDeleteItem = async (id) => {
+    // Confirm dialogue
+    if (!window.confirm("Decrease stock (or delete if 1 left)?")) return;
+
+    try {
+      const res = await axios.delete(`http://127.0.0.1:5000/productStock/${id}`);
+      
+      console.log("Server Response:", res.data);
+
+      if (res.data.message && res.data.message.includes("deleted")) {
+        setProducts(products.filter(product => product.id !== id));
+      } else {
+        setProducts(products.map(product => {
+          if (product.id === id) {
+            return { ...product, stock: product.stock - 1 };
+          }
+          return product;
+        }));
+      }
+
+    } catch (error) {
+      console.error("Delete Error:", error);
+      alert("Failed to update item.");
+    }
+  };
   // --- QUEUE LOGIC ---
   const loadNextItem = (currentQueue) => {
     if (currentQueue.length > 0) {
@@ -127,24 +157,27 @@ const handleDelete = async (id) => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
-      const items = res.data; // Now a list [Item1, Item2, Item3]
+      const items = res.data;
       
       if (items.length > 0) {
-        alert(`Found ${items.length} items! Reviewing first one...`);
-        // Load the first one immediately, save the rest to queue
+        alert(`Found ${items.length} items!`);
         const first = items[0];
-        const rest = items.slice(1);
-        
         setNewProduct({ name: first.name, price: first.price, stock: first.stock });
-        setScannedQueue(rest);
+        setScannedQueue(items.slice(1));
+      } else {
+        alert("OCR finished but found no items. Try a clearer image.");
       }
     } catch (error) {
       console.error("Scan Error:", error);
       alert("Could not read invoice.");
     }
+
+    // --- THE FIX: RESET THE INPUT ---
+    // This allows you to select the exact same file again if needed.
+    e.target.value = null; 
+    
     setUploading(false);
   };
-
   const handleAddProduct = async () => {
     if (!newProduct.name || !newProduct.price) {
       alert("Please fill in Name and Price");
@@ -258,9 +291,11 @@ const handleDelete = async (id) => {
                     {/* Right Side: Price + Delete Button */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                       <span style={{ color: '#28a745', fontWeight: 'bold' }}>${p.price}</span>
-                      
+                      <button onClick={() => handleDeleteItem(p.id) } style={{
+                          background: '#c56262',color: 'white',border: 'none',borderRadius: '4px',padding: '5px 10px',cursor: 'pointer',fontSize: '0.8rem'
+                        }}>Minus</button>
                       <button 
-                        onClick={() => handleDelete(p.id)}
+                        onClick={() => handleDeleteProduct(p.id)}
                         style={{
                           background: '#ff4d4d',color: 'white',border: 'none',borderRadius: '4px',padding: '5px 10px',cursor: 'pointer',fontSize: '0.8rem'
                         }}

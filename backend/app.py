@@ -214,10 +214,38 @@ def get_products():
 def add_product():
     data=request.get_json()
 
-    new_product=Product(name=data['name'],price=data['price'],stock=data.get('stock',0))
-    db.session.add(new_product)
-    db.session.commit()
-    return jsonify({'message':'Product Created Successfully'})
+    item_name=data['name']
+
+    existing_product=Product.query.filter(Product.name.ilike(item_name)).first()
+    
+    if existing_product:
+        existing_product.stock+=int(data['stock'])
+
+        db.session.commit()
+        return jsonify({"message":"Updated stock"})
+    else:
+
+        new_product=Product(name=data['name'],price=data['price'],stock=data.get('stock',0))
+        db.session.add(new_product)
+        db.session.commit()
+        return jsonify({'message':'Product Created Successfully'})
+
+@app.route('/productStock/<int:id>',methods=['DELETE'])
+def delete_item(id):
+    product=db.get_or_404(Product,id)
+    try:
+        if product.stock>1:
+            product.stock-=1
+            db.session.commit()
+            print("Stock updated successfully")
+            return jsonify({"message":"updated successfully"}),200
+        else:
+            db.session.delete(product)
+            db.session.commit()
+            print("Product deleted successfully")
+            return jsonify({"message":"deleted successfully"}),200
+    except Exception as e:
+        return jsonify({"Error":str(e)}),500
 
 @app.route('/products/<int:id>',methods=['DELETE'])
 def delete_product(id):
@@ -225,11 +253,11 @@ def delete_product(id):
     try:
         db.session.delete(product)
         db.session.commit()
-        print("User deleted successfully")
+        print("Product deleted successfully")
         return jsonify({"message":"deleted successfully"}),200
     except Exception as e:
         return jsonify({"Error":str(e)}),500
-
+    
 @app.route('/ask',methods=['POST'])
 def ask_database():
     query=request.json.get('question')
@@ -254,7 +282,11 @@ def scan_invoice():
 
     try:
         #json_str=analyze_image_with_gemini(file)
-        ocr_txt=read_text_with_ocr('testimg.png')
+        img=PIL.Image.open(file)
+
+        custom_config = r'--oem 3 --psm 6'
+        ocr_txt = pytesseract.image_to_string(img, config=custom_config)
+        #ocr_txt=read_text_with_ocr('testimg.png')
         data=parse_invoice_text(ocr_txt)
         #data=json.loads(json_str)
 
