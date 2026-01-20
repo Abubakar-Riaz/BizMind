@@ -60,7 +60,7 @@ def get_sql_from_gemini(query):
         3. If the user asks for total value, use SUM(price * stock).
     """
 
-    model=genai.GenerativeModel('gemini-3-flash-preview')
+    model=genai.GenerativeModel('gemini-2.5-flash')
     response=model.generate_content(prompt)
 
     return response.text.replace('```sql', '').replace('```', '').strip()
@@ -78,7 +78,7 @@ def get_summary_from_gemini(query,generated_sql,result):
         Keep it short and professional.
     """
         
-        summary_model = genai.GenerativeModel('gemini-3-flash-preview')
+        summary_model = genai.GenerativeModel('gemini-2.5-flash')
         summary_response = summary_model.generate_content(summary_prompt)
         human_answer = str(summary_response.text)
     else:
@@ -90,7 +90,7 @@ def get_summary_from_gemini(query,generated_sql,result):
 def analyze_image_with_gemini(image_file):
     img=PIL.Image.open(image_file)
 
-    model=genai.GenerativeModel('gemini-3-flash-preview')
+    model=genai.GenerativeModel('gemini-2.5-flash')
 
     prompt="""
     Analyze this image of a product label, invoice, or list.
@@ -269,7 +269,7 @@ def ask_database():
         data=[dict(row._mapping) for row in result]
 
         finalResponse=get_summary_from_gemini(query,generated_Sql,data)
-        return jsonify({"answer":finalResponse,"generated sql":generated_Sql})
+        return jsonify({"human_text":finalResponse,"generated_sql":generated_Sql,"answer":data})
     except Exception as e:
         return jsonify({"error":str(e)})
     

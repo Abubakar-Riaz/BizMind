@@ -4,7 +4,8 @@ import axios from 'axios';
 // --- Helper Component: AI Chat Display ---
 const AIResultDisplay = ({ data }) => {
   if (!data || !Array.isArray(data) || data.length === 0) {
-    return <p style={{ color: '#888', fontStyle: 'italic' }}>No data table to display.</p>;
+    //return <p style={{ color: '#888', fontStyle: 'italic' }}>No data table to display.</p>;
+    return null;
   }
   const firstItem = data[0];
   const keys = Object.keys(firstItem);
@@ -322,7 +323,7 @@ const handleDeleteItem = async (id) => {
             <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
                {aiResponse.error && <p style={{ color: 'red' }}>{aiResponse.error}</p>}
                {aiResponse.human_text && <div style={{ padding: '10px', background: '#e3f2fd', borderRadius: '8px', marginBottom: '15px', color: '#0d47a1' }}><strong>🤖 AI: </strong> {aiResponse.human_text}</div>}
-               <AIResultDisplay data={aiResponse.answer} />
+               <AIResultDisplay data={aiResponse.human_text} />
             </div>
           )}
         </div>
