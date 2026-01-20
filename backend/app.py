@@ -1,11 +1,16 @@
 import os
+import json
+import PIL.Image
 from flask import Flask,jsonify,request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from dotenv import load_dotenv
 import google.generativeai as genai
+import pytesseract
 
+
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 load_dotenv()
 API_KEY=os.getenv('GOOGLE_API_KEY')
 
@@ -81,6 +86,26 @@ def get_summary_from_gemini(query,generated_sql,result):
         # Step 5: Return BOTH the data (for tables) and the text (for chat)
     return human_answer
 
+def analyze_image_with_gemini(image_file):
+    img=PIL.Image.open(image_file)
+
+    model=genai.GenerativeModel('gemini-3-flash-preview')
+
+    prompt="""
+    Analyze this image of a product label, invoice, or list.
+    Extract the following product details into a valid JSON object:
+    - name: The main product name (string)
+    - price: The price per unit (number)
+    - stock: The quantity or stock count (integer). Default to 1 if not found.
+
+    Return ONLY raw JSON. No markdown formatting.
+    """
+
+    response=model.generate_content([prompt,img])
+
+    clean_json=response.text.replace('```json','').replace('```','').strip()
+    return clean_json
+
 @app.route('/products',methods=['GET'])
 def get_products():
     products=Product.query.all()
@@ -114,6 +139,30 @@ def ask_database():
         return jsonify({"answer":finalResponse,"generated sql":generated_Sql})
     except Exception as e:
         return jsonify({"error":str(e)})
+    
+@app.route('/scan-invoice',methods=['POST'])
+def scan_invoice():
+    if 'file' not in request.files:
+        return jsonify({"error":"No file uploaded"}),400
+    
+    file=request.files['file']
+
+    try:
+        json_str=analyze_image_with_gemini(file)
+        data=json.loads(json_str)
+
+        if not isinstance(data,list):
+            data=[data]
+        return jsonify(data)
+        #     if(len(data)>0):
+        #         data=data[0]
+        #     else:
+        #         return jsonify({"error":"No product found in list"}),400
+        # return jsonify(data)
+    
+    except Exception as e:
+        print(f"Vision Error:{e}")
+        return jsonify({"error":"Could not read image"}),500
     
 if __name__=='__main__':
     with app.app_context():
